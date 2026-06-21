@@ -1,28 +1,45 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { onValue, ref, set } from 'firebase/database';
+import { onValue, ref, update } from 'firebase/database';
 import { useEffect, useState } from 'react';
 import { db } from '../config/firebase';
 
 export default function Index() {
   const [lampu, setLampu] = useState(false);
+  const [saklarAktif, setSaklarAktif] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // membaca status lampu dari ESP32
+  // membaca status lampu dan saklar fisik dari ESP32
   useEffect(() => {
     const lampuRef = ref(db, 'kontrol/led_relay_status');
-    const unsubscribe = onValue(lampuRef, (snapshot) => {
+    const saklarRef = ref(db, 'kontrol/saklar');
+
+    const unsubscribeLampu = onValue(lampuRef, (snapshot) => {
       const data = snapshot.val();
-      setLampu(data === 1);
+      setLampu(data === 1 || data === true || data === 'ON');
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    const unsubscribeSaklar = onValue(saklarRef, (snapshot) => {
+      const data = snapshot.val();
+      setSaklarAktif(data === 'ON' || data === 1 || data === true);
+    });
+
+    return () => {
+      unsubscribeLampu();
+      unsubscribeSaklar();
+    };
   }, []);
 
   // kirim perintah ke ESP32
   const kontrolLampu = async (status: boolean) => {
-    const appRef = ref(db, 'kontrol/app');
-    await set(appRef, status ? 'ON' : 'OFF');
+    if (saklarAktif) {
+      return;
+    }
+
+    await update(ref(db, 'kontrol'), {
+      app: status ? 'ON' : 'OFF',
+      led_relay_status: status ? 1 : 0,
+    });
   };
 
   if (loading) {
@@ -45,14 +62,17 @@ export default function Index() {
         ]}
       />
       <Text style={styles.status}>Lampu :{lampu ? ' ON' : ' OFF'}</Text>
+      <Text style={styles.statusSaklar}>Saklar fisik :{saklarAktif ? ' ON' : ' OFF'}</Text>
       <Pressable
-        style={styles.button}
+        disabled={saklarAktif}
+        style={[styles.button, saklarAktif && styles.buttonDisabled]}
         onPress={() => kontrolLampu(true)}
       >
         <Text style={styles.textButton}>HIDUPKAN</Text>
       </Pressable>
       <Pressable
-        style={styles.button}
+        disabled={saklarAktif}
+        style={[styles.button, saklarAktif && styles.buttonDisabled]}
         onPress={() => kontrolLampu(false)}
       >
         <Text style={styles.textButton}>MATIKAN</Text>
@@ -84,6 +104,11 @@ const styles = StyleSheet.create({
 
   status: {
     fontSize: 20,
+    marginBottom: 10,
+  },
+
+  statusSaklar: {
+    fontSize: 16,
     marginBottom: 30,
   },
 
@@ -94,6 +119,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginVertical: 10,
     alignItems: 'center',
+  },
+
+  buttonDisabled: {
+    backgroundColor: '#9e9e9e',
   },
 
   textButton: {
