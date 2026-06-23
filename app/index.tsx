@@ -58,7 +58,7 @@ export default function Index() {
 
   // kirim perintah ke ESP32
   const kontrolLampu = async (status: boolean) => {
-    if (saklarAktif || !espOnline) {
+    if (!espOnline) {
       return;
     }
 
@@ -153,13 +153,6 @@ export default function Index() {
             <MaterialCommunityIcons name="wifi-off" size={24} color="#EF4444" />
             <Text style={styles.offlineWarningText}>
               Alat ESP32 Terputus (Offline). Pastikan alat menyala dan terhubung ke WiFi rumah Anda.
-            </Text>
-          </View>
-        ) : saklarAktif ? (
-          <View style={styles.lockWarningCard}>
-            <MaterialCommunityIcons name="lock" size={24} color="#EF4444" />
-            <Text style={styles.lockWarningText}>
-              Aplikasi terkunci karena saklar fisik di dinding sedang aktif. Matikan saklar fisik terlebih dahulu untuk menggunakan aplikasi.
             </Text>
           </View>
         ) : (
