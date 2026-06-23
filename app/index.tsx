@@ -9,11 +9,14 @@ export default function Index() {
   const [lampu, setLampu] = useState(false);
   const [saklarAktif, setSaklarAktif] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [espOnline, setEspOnline] = useState(false);
+  const [lastHeartbeatReceivedAt, setLastHeartbeatReceivedAt] = useState<number>(0);
 
-  // membaca status lampu dan saklar fisik dari ESP32
+  // membaca status lampu, saklar fisik, dan heartbeat dari ESP32
   useEffect(() => {
     const lampuRef = ref(db, 'kontrol/led_relay_status');
     const saklarRef = ref(db, 'kontrol/saklar');
+    const heartbeatRef = ref(db, 'kontrol/heartbeat');
 
     const unsubscribeLampu = onValue(lampuRef, (snapshot) => {
       const data = snapshot.val();
@@ -26,15 +29,36 @@ export default function Index() {
       setSaklarAktif(data === 'ON' || data === 1 || data === true);
     });
 
+    const unsubscribeHeartbeat = onValue(heartbeatRef, (snapshot) => {
+      setLastHeartbeatReceivedAt(Date.now());
+      setEspOnline(true);
+    });
+
     return () => {
       unsubscribeLampu();
       unsubscribeSaklar();
+      unsubscribeHeartbeat();
     };
   }, []);
 
+  // Cek secara berkala apakah ESP32 masih mengirim heartbeat
+  useEffect(() => {
+    if (lastHeartbeatReceivedAt === 0) {
+      setEspOnline(false);
+      return;
+    }
+
+    const checkInterval = setInterval(() => {
+      const timeDiff = Date.now() - lastHeartbeatReceivedAt;
+      setEspOnline(timeDiff < 12000); // Batas 12 detik
+    }, 4000); // Cek setiap 4 detik
+
+    return () => clearInterval(checkInterval);
+  }, [lastHeartbeatReceivedAt]);
+
   // kirim perintah ke ESP32
   const kontrolLampu = async (status: boolean) => {
-    if (saklarAktif) {
+    if (saklarAktif || !espOnline) {
       return;
     }
 
@@ -64,24 +88,35 @@ export default function Index() {
           <Text style={styles.headerSubtitle}>SYSTEM DASHBOARD</Text>
           <Text style={styles.headerTitle}>Smart Hub</Text>
         </View>
-        <View style={styles.connectionBadge}>
-          <View style={styles.badgeDot} />
-          <Text style={styles.badgeText}>Connected</Text>
+        <View style={[styles.connectionBadge, !espOnline && styles.connectionBadgeOffline]}>
+          <View style={[styles.badgeDot, !espOnline && styles.badgeDotOffline]} />
+          <Text style={[styles.badgeText, !espOnline && styles.badgeTextOffline]}>
+            {espOnline ? 'ESP32: Online' : 'ESP32: Offline'}
+          </Text>
         </View>
       </View>
 
       {/* Main Lamp Status Orb Card */}
-      <View style={[styles.mainCard, lampu ? styles.mainCardOn : styles.mainCardOff]}>
-        <View style={[styles.orbContainer, lampu ? styles.orbContainerOn : styles.orbContainerOff]}>
+      <View style={[
+        styles.mainCard, 
+        !espOnline ? styles.mainCardOffline : (lampu ? styles.mainCardOn : styles.mainCardOff)
+      ]}>
+        <View style={[
+          styles.orbContainer, 
+          !espOnline ? styles.orbContainerOffline : (lampu ? styles.orbContainerOn : styles.orbContainerOff)
+        ]}>
           <MaterialCommunityIcons 
-            name={lampu ? "lightbulb-on" : "lightbulb-outline"} 
+            name={!espOnline ? "wifi-off" : (lampu ? "lightbulb-on" : "lightbulb-outline")} 
             size={72} 
-            color={lampu ? "#F59E0B" : "#94A3B8"} 
+            color={!espOnline ? "#64748B" : (lampu ? "#F59E0B" : "#94A3B8")} 
           />
         </View>
         <Text style={styles.statusLabel}>STATUS LAMPU UTAMA</Text>
-        <Text style={[styles.statusValue, lampu ? styles.statusValueOn : styles.statusValueOff]}>
-          {lampu ? "MENYALA" : "PADAM"}
+        <Text style={[
+          styles.statusValue, 
+          !espOnline ? styles.statusValueOffline : (lampu ? styles.statusValueOn : styles.statusValueOff)
+        ]}>
+          {!espOnline ? "OFFLINE" : (lampu ? "MENYALA" : "PADAM")}
         </Text>
       </View>
 
@@ -113,7 +148,14 @@ export default function Index() {
       <View style={styles.controlPanel}>
         <Text style={styles.sectionTitle}>KONTROL PERANGKAT</Text>
         
-        {saklarAktif ? (
+        {!espOnline ? (
+          <View style={styles.offlineWarningCard}>
+            <MaterialCommunityIcons name="wifi-off" size={24} color="#EF4444" />
+            <Text style={styles.offlineWarningText}>
+              Alat ESP32 Terputus (Offline). Pastikan alat menyala dan terhubung ke WiFi rumah Anda.
+            </Text>
+          </View>
+        ) : saklarAktif ? (
           <View style={styles.lockWarningCard}>
             <MaterialCommunityIcons name="lock" size={24} color="#EF4444" />
             <Text style={styles.lockWarningText}>
@@ -211,6 +253,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#334155',
   },
+  connectionBadgeOffline: {
+    borderColor: '#EF4444',
+  },
   badgeDot: {
     width: 8,
     height: 8,
@@ -218,10 +263,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981', // Emerald 500
     marginRight: 6,
   },
+  badgeDotOffline: {
+    backgroundColor: '#EF4444',
+  },
   badgeText: {
     color: '#10B981',
     fontSize: 12,
     fontWeight: '600',
+  },
+  badgeTextOffline: {
+    color: '#EF4444',
   },
   mainCard: {
     backgroundColor: '#1E293B',
@@ -243,6 +294,10 @@ const styles = StyleSheet.create({
   mainCardOff: {
     borderColor: '#334155',
   },
+  mainCardOffline: {
+    borderColor: '#334155',
+    opacity: 0.6,
+  },
   orbContainer: {
     width: 140,
     height: 140,
@@ -262,6 +317,9 @@ const styles = StyleSheet.create({
   orbContainerOff: {
     backgroundColor: '#334155',
   },
+  orbContainerOffline: {
+    backgroundColor: '#1E293B',
+  },
   statusLabel: {
     color: '#64748B',
     fontSize: 12,
@@ -279,6 +337,9 @@ const styles = StyleSheet.create({
   },
   statusValueOff: {
     color: '#94A3B8',
+  },
+  statusValueOffline: {
+    color: '#64748B',
   },
   switchCard: {
     backgroundColor: '#1E293B',
@@ -370,6 +431,23 @@ const styles = StyleSheet.create({
     flex: 1,
     fontWeight: '500',
   },
+  offlineWarningCard: {
+    backgroundColor: '#2D1B1E',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  offlineWarningText: {
+    color: '#FCA5A5',
+    fontSize: 13,
+    lineHeight: 18,
+    marginLeft: 12,
+    flex: 1,
+    fontWeight: '500',
+  },
   buttonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -393,7 +471,7 @@ const styles = StyleSheet.create({
   },
   buttonOffActive: {
     borderColor: '#EF4444',
-    backgroundColor: '#271B20', // subtle red glow when inactive active
+    backgroundColor: '#271B20',
   },
   buttonOn: {
     backgroundColor: '#1E293B',
@@ -402,7 +480,7 @@ const styles = StyleSheet.create({
   },
   buttonOnActive: {
     borderColor: '#F59E0B',
-    backgroundColor: '#272015', // subtle amber glow when active
+    backgroundColor: '#272015',
   },
   buttonText: {
     fontSize: 14,
