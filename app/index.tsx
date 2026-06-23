@@ -7,26 +7,19 @@ import { StatusBar } from 'expo-status-bar';
 
 export default function Index() {
   const [lampu, setLampu] = useState(false);
-  const [saklarAktif, setSaklarAktif] = useState(false);
   const [loading, setLoading] = useState(true);
   const [espOnline, setEspOnline] = useState(false);
   const [lastHeartbeatReceivedAt, setLastHeartbeatReceivedAt] = useState<number>(0);
 
-  // membaca status lampu, saklar fisik, dan heartbeat dari ESP32
+  // membaca status lampu dan heartbeat dari ESP32
   useEffect(() => {
     const lampuRef = ref(db, 'kontrol/led_relay_status');
-    const saklarRef = ref(db, 'kontrol/saklar');
     const heartbeatRef = ref(db, 'kontrol/heartbeat');
 
     const unsubscribeLampu = onValue(lampuRef, (snapshot) => {
       const data = snapshot.val();
       setLampu(data === 1 || data === true || data === 'ON');
       setLoading(false);
-    });
-
-    const unsubscribeSaklar = onValue(saklarRef, (snapshot) => {
-      const data = snapshot.val();
-      setSaklarAktif(data === 'ON' || data === 1 || data === true);
     });
 
     const unsubscribeHeartbeat = onValue(heartbeatRef, (snapshot) => {
@@ -36,7 +29,6 @@ export default function Index() {
 
     return () => {
       unsubscribeLampu();
-      unsubscribeSaklar();
       unsubscribeHeartbeat();
     };
   }, []);
@@ -118,30 +110,6 @@ export default function Index() {
         ]}>
           {!espOnline ? "OFFLINE" : (lampu ? "MENYALA" : "PADAM")}
         </Text>
-      </View>
-
-      {/* Physical Switch Status Row */}
-      <View style={[styles.switchCard, saklarAktif && styles.switchCardWarning]}>
-        <View style={styles.switchCardHeader}>
-          <View style={styles.switchIconWrapper}>
-            <MaterialCommunityIcons 
-              name={saklarAktif ? "toggle-switch" : "toggle-switch-off-outline"} 
-              size={32} 
-              color={saklarAktif ? "#F97316" : "#64748B"} 
-            />
-          </View>
-          <View style={styles.switchTextContainer}>
-            <Text style={styles.switchTitle}>Saklar Dinding Fisik</Text>
-            <Text style={styles.switchSubtitle}>
-              {saklarAktif ? "Saklar aktif secara manual" : "Saklar berada di posisi OFF"}
-            </Text>
-          </View>
-        </View>
-        <View style={[styles.switchBadge, saklarAktif ? styles.switchBadgeActive : styles.switchBadgeInactive]}>
-          <Text style={[styles.switchBadgeText, saklarAktif ? styles.switchBadgeTextActive : styles.switchBadgeTextInactive]}>
-            {saklarAktif ? "AKTIF" : "OFF"}
-          </Text>
-        </View>
       </View>
 
       {/* Quick Action / Control Panel */}
@@ -334,69 +302,6 @@ const styles = StyleSheet.create({
   statusValueOffline: {
     color: '#64748B',
   },
-  switchCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
-    marginBottom: 32,
-  },
-  switchCardWarning: {
-    borderColor: '#F97316', // Orange when switch is overriding
-    backgroundColor: '#2C1D11', // Very dark warm background
-  },
-  switchCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  switchIconWrapper: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#334155',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  switchTextContainer: {
-    flex: 1,
-  },
-  switchTitle: {
-    color: '#F8FAFC',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  switchSubtitle: {
-    color: '#64748B',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  switchBadge: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-  },
-  switchBadgeActive: {
-    backgroundColor: '#F97316',
-  },
-  switchBadgeInactive: {
-    backgroundColor: '#334155',
-  },
-  switchBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  switchBadgeTextActive: {
-    color: '#F8FAFC',
-  },
-  switchBadgeTextInactive: {
-    color: '#94A3B8',
-  },
   controlPanel: {
     marginBottom: 24,
   },
@@ -406,23 +311,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1.2,
     marginBottom: 16,
-  },
-  lockWarningCard: {
-    backgroundColor: '#2D1B1E',
-    borderWidth: 1,
-    borderColor: '#EF4444',
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  lockWarningText: {
-    color: '#FCA5A5',
-    fontSize: 13,
-    lineHeight: 18,
-    marginLeft: 12,
-    flex: 1,
-    fontWeight: '500',
   },
   offlineWarningCard: {
     backgroundColor: '#2D1B1E',
